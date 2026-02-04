@@ -43,7 +43,7 @@ export const TrendingMarkets = ({ onSelect }: { onSelect: (url: string) => void 
   const fetchTrending = async () => {
     setLoading(true);
     try {
-        const res = await fetch(`/api/trending`);
+        const res = await fetch(`/api/trending?filter=${filter}`);
         if (res.ok) {
             const data = await res.json();
             setMarkets(data);
@@ -54,6 +54,11 @@ export const TrendingMarkets = ({ onSelect }: { onSelect: (url: string) => void 
         setLoading(false);
     }
   };
+
+  // Re-fetch when filter changes
+  useEffect(() => {
+    fetchTrending();
+  }, [filter]);
 
   const sortedMarkets = [...markets].sort((a, b) => {
       // Logic for different filters can be added here
@@ -93,7 +98,7 @@ export const TrendingMarkets = ({ onSelect }: { onSelect: (url: string) => void 
             </div>
             
             <div className="flex p-1 bg-[#0F0F0F] border border-white/5 rounded-lg">
-                {(['trending', 'new', 'winners'] as const).map((f) => (
+                {(['trending', 'new'] as const).map((f) => (
                     <button
                         key={f}
                         onClick={() => setFilter(f)}

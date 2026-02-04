@@ -3,23 +3,20 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const query = searchParams.get('q');
+    const filter = searchParams.get('filter') || 'trending'; // 'trending' | 'new'
 
-    let url = 'https://gamma-api.polymarket.com/events?limit=12&active=true&closed=false&order=volume&ascending=false';
+    let url = '';
     
-    // If search query is present, use it (assuming endpoint supports 'q' or we filter manually)
-    // Gamma API typically supports 'q' or text search on some endpoints. 
-    // If not, we might need to filter locally or use a different endpoint.
-    // For now, let's append '&q=' if it exists, or just rely on volume if no search.
-    // Actually, checking docs/common usage, Gamma uses `slug` or `id`. 
-    // But let's try appending `&q=${query}` if supported, or just fetch more and filter.
-    // A better approach for search might be using the specific search endpoint if it exists.
-    // But let's assume 'q' works or we filter the top 20-50 events if 'q' is provided.
-    
-    if (query) {
-        // Fetch more to filter locally if API doesn't support direct search well enough
-        url = `https://gamma-api.polymarket.com/events?limit=50&active=true&closed=false&order=volume&ascending=false`;
+    if (filter === 'new') {
+        // Fetch newly created markets (sort by startDate or createdAt - Gamma uses startDate usually for 'new')
+        // Using startDate descending to get the newest
+        url = 'https://gamma-api.polymarket.com/events?limit=12&active=true&closed=false&order=startDate&ascending=false';
+    } else {
+        // Default: Trending (High Volume)
+        url = 'https://gamma-api.polymarket.com/events?limit=12&active=true&closed=false&order=volume&ascending=false';
     }
+    
+    // ... rest of the code ...
 
     const response = await fetch(url, {
         headers: {
@@ -35,11 +32,6 @@ export async function GET(request: Request) {
 
     let events = await response.json();
 
-    if (query) {
-        const q = query.toLowerCase();
-        events = events.filter((e: any) => e.title.toLowerCase().includes(q) || e.slug.toLowerCase().includes(q));
-    }
-    
     // Limit back to 12 if we fetched more for filtering
     events = events.slice(0, 12);
 
