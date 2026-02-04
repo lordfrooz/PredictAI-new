@@ -16,8 +16,6 @@ export async function GET(request: Request) {
         url = 'https://gamma-api.polymarket.com/events?limit=12&active=true&closed=false&order=volume&ascending=false';
     }
     
-    // ... rest of the code ...
-
     const response = await fetch(url, {
         headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -44,11 +42,16 @@ export async function GET(request: Request) {
         // We need to parse outcomes correctly.
         
         let topOutcomes: { name: string, prob: number, change?: number }[] = [];
+        let mainMarket = event.markets?.[0];
         
         // Check if markets exist
         if (event.markets && event.markets.length > 0) {
-             const mainMarket = event.markets[0];
-             
+             // Find the market with the highest volume to represent the event
+             // This ensures we show the most relevant option's price change
+             mainMarket = event.markets.reduce((prev: any, current: any) => 
+                (Number(current.volume || 0) > Number(prev.volume || 0)) ? current : prev
+             , event.markets[0]);
+
              if (mainMarket.groupItemTitle) {
                  // Group Market (Multiple Outcomes as separate markets)
                  // We need to find the top 2 by price
@@ -96,7 +99,7 @@ export async function GET(request: Request) {
              }
         }
 
-        const market = event.markets?.[0];
+        const market = mainMarket || event.markets?.[0];
 
         return {
             title: event.title,

@@ -16,7 +16,7 @@ export const TrendingMarkets = ({ onSelect }: { onSelect: (url: string) => void 
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [notification, setNotification] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'trending' | 'new' | 'winners'>('trending');
+  const [filter, setFilter] = useState<'trending' | 'new'>('trending');
 
   useEffect(() => {
     const storedFavs = localStorage.getItem('marketFavorites');
@@ -40,7 +40,7 @@ export const TrendingMarkets = ({ onSelect }: { onSelect: (url: string) => void 
       setTimeout(() => setNotification(null), 2000);
   };
 
-  const fetchTrending = async () => {
+  const fetchTrending = React.useCallback(async () => {
     setLoading(true);
     try {
         const res = await fetch(`/api/trending?filter=${filter}`);
@@ -53,12 +53,12 @@ export const TrendingMarkets = ({ onSelect }: { onSelect: (url: string) => void 
     } finally {
         setLoading(false);
     }
-  };
+  }, [filter]);
 
   // Re-fetch when filter changes
   useEffect(() => {
     fetchTrending();
-  }, [filter]);
+  }, [fetchTrending]);
 
   const sortedMarkets = [...markets].sort((a, b) => {
       // Logic for different filters can be added here

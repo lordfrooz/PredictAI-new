@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
                 price_change_24h: Number(m.oneDayPriceChange || 0)
             };
         })
-        .sort((a, b) => b.implied_probability - a.implied_probability); // Sort by probability DESC
+        .sort((a: MarketOption, b: MarketOption) => b.implied_probability - a.implied_probability); // Sort by probability DESC
         
         // Use the event volume
         mainMarket = event.markets[0]; // Just for other metadata
