@@ -217,7 +217,7 @@ function WhaleRadar({ data }: { data?: { buyWall: number; sellWall: number; larg
                 <div className="text-2xl font-bold text-white font-mono mb-1 group-hover:text-green-400 transition-colors">
                     {whaleData.buyWall}
                 </div>
-                <div className="text-[10px] text-gray-500 uppercase tracking-wider font-mono">Buy Walls ($10k+)</div>
+                <div className="text-xs text-gray-500 uppercase tracking-wider font-mono">Buy Walls ($10k+)</div>
             </div>
 
             {/* Sell Walls */}
@@ -225,7 +225,7 @@ function WhaleRadar({ data }: { data?: { buyWall: number; sellWall: number; larg
                 <div className="text-2xl font-bold text-white font-mono mb-1 group-hover:text-red-400 transition-colors">
                     {whaleData.sellWall}
                 </div>
-                <div className="text-[10px] text-gray-500 uppercase tracking-wider font-mono">Sell Walls ($10k+)</div>
+                <div className="text-xs text-gray-500 uppercase tracking-wider font-mono">Sell Walls ($10k+)</div>
             </div>
 
             {/* Large Trades */}
@@ -233,7 +233,7 @@ function WhaleRadar({ data }: { data?: { buyWall: number; sellWall: number; larg
                 <div className="text-2xl font-bold text-white font-mono mb-1 group-hover:text-blue-400 transition-colors">
                     {whaleData.largeTrades}
                 </div>
-                <div className="text-[10px] text-gray-500 uppercase tracking-wider font-mono">Large Trades (24h)</div>
+                <div className="text-xs text-gray-500 uppercase tracking-wider font-mono">Large Trades (24h)</div>
             </div>
         </div>
     </div>

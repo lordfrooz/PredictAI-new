@@ -10,30 +10,118 @@ import { SiteFooter } from '@/components/layout/SiteFooter';
 import { LandingPage } from '@/components/landing/LandingPage';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { SmoothScroll } from '@/components/ui/SmoothScroll';
+import { MinimalDashboard } from '@/components/features/MinimalDashboard';
+import { Button } from '@/components/ui/Primitives';
+import { Leaderboard } from '@/components/features/Leaderboard';
+import { HotActivities } from '@/components/features/HotActivities';
 
 function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showLanding, setShowLanding] = useState(true);
+  
+  // Navigation State
+  const [view, setView] = useState<'markets' | 'activity' | 'leaderboard'>('markets');
+
+  // Analysis State (Moved from /analyst/page.tsx)
   const [url, setUrl] = useState('');
+  const [result, setResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const [elapsedTime, setElapsedTime] = useState(0);
+
   const [showGuide, setShowGuide] = useState(false);
   const [showWhoAmI, setShowWhoAmI] = useState(false);
 
   useEffect(() => {
-    // Check if we should skip landing page (e.g. returning from analyst page)
+    // Check if we should skip landing page
     const skipLanding = searchParams.get('skipLanding');
     if (skipLanding === 'true') {
         setShowLanding(false);
     }
+    
+    // Check for URL param to trigger auto-analysis (backward compatibility)
+    const urlParam = searchParams.get('url');
+    if (urlParam) {
+        setShowLanding(false);
+        setUrl(urlParam);
+        handleAnalyze(urlParam);
+    }
   }, [searchParams]);
+
+  // Timer for elapsed time during loading
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (loading || isRefreshing) {
+      setElapsedTime(0);
+      timer = setInterval(() => {
+        setElapsedTime(prev => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [loading, isRefreshing]);
 
   if (showLanding) {
       return <LandingPage onEnter={() => setShowLanding(false)} />;
   }
 
-  const handleAnalyze = (inputUrl: string) => {
+  const handleAnalyze = async (inputUrl: string, forceRefresh = false) => {
     if (!inputUrl) return;
-    router.push(`/analyst?url=${encodeURIComponent(inputUrl)}`);
+    
+    if (forceRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+      setResult(null);
+    }
+    setError('');
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000); 
+      
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: inputUrl, forceRefresh }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Analysis failed');
+      }
+
+      const data = await res.json();
+      setResult(data);
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        setError('Request timed out. The market may have too many options. Try again or choose a simpler market.');
+      } else {
+        setError(err.message);
+      }
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    if (url) {
+      handleAnalyze(url, true);
+    }
+  };
+
+  const handleClearAnalysis = () => {
+      setResult(null);
+      setError('');
+      setLoading(false);
+      setUrl('');
   };
 
   return (
@@ -46,113 +134,205 @@ function HomeContent() {
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03]"></div>
         </div>
 
-        {/* Minimal Navigation */}
-        <nav className="fixed top-0 left-0 w-full z-50 px-6 py-6 flex justify-between items-center mix-blend-difference text-white">
-            <div className="flex items-center gap-2 opacity-50 hover:opacity-100 transition-opacity cursor-pointer">
-                <span className="text-xs font-mono tracking-widest uppercase">PredictlyAI v2.0</span>
+        {/* Top Navbar */}
+        <nav className="fixed top-0 left-0 w-full z-50 px-6 py-4 flex justify-between items-center bg-[#050505]/80 backdrop-blur-md border-b border-white/5">
+            {/* Left: Brand Logo */}
+            <div className="flex items-center gap-4 cursor-pointer" onClick={() => { handleClearAnalysis(); setView('markets'); }}>
+                 <BrandLogo size="small" layoutIdPrefix="nav-" isAnimated={false} />
             </div>
-            <div className="flex items-center gap-3 text-xs font-mono">
+
+            {/* Middle: Navigation */}
+            <div className="hidden md:flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/5">
+                <button 
+                    onClick={() => { handleClearAnalysis(); setView('markets'); }}
+                    className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${view === 'markets' && !result ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                >
+                    Markets
+                </button>
+                <button 
+                    onClick={() => { handleClearAnalysis(); setView('activity'); }}
+                    className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${view === 'activity' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                >
+                    Activity
+                </button>
+                <button 
+                    onClick={() => { handleClearAnalysis(); setView('leaderboard'); }}
+                    className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${view === 'leaderboard' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                >
+                    Leaderboard
+                </button>
+            </div>
+
+            {/* Right: Search & Profile */}
+            <div className="flex items-center gap-4">
+               <div className="hidden lg:flex items-center bg-[#0F0F0F] border border-white/10 rounded-lg px-3 py-1.5 w-64 focus-within:border-white/20 transition-colors">
+                   <svg className="w-4 h-4 text-gray-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                   <input 
+                       value={url}
+                       onChange={(e) => setUrl(e.target.value)}
+                       onKeyDown={(e) => e.key === 'Enter' && handleAnalyze(url)}
+                       placeholder="Paste URL to analyze..."
+                       className="bg-transparent border-none text-xs text-white placeholder-gray-500 focus:outline-none w-full"
+                   />
+               </div>
                <button 
                  onClick={() => setShowWhoAmI(true)}
-                 className="text-xs font-medium hover:text-gray-300 transition-colors tracking-wide"
+                 className="text-xs font-medium text-gray-400 hover:text-white transition-colors"
                >
                  About
                </button>
             </div>
         </nav>
 
-        {/* Main Content */}
-        <main className="relative z-10 flex-1 flex flex-col p-6 md:p-12 max-w-7xl mx-auto w-full pt-32">
-          
-          <AnimatePresence mode="wait">
-               <motion.div 
-                 key="dashboard"
-                 initial={{ opacity: 0, y: 20, filter: 'blur(10px)' }}
-                 animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                 exit={{ opacity: 0, y: -20, filter: 'blur(10px)' }}
-                 transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-                 className="flex-1 flex flex-col relative"
-               >
-                  
-                  <div className="mb-24 text-center space-y-8 max-w-3xl mx-auto">
-                     <motion.div 
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ duration: 1, delay: 0.1 }}
-                        className="flex justify-center mb-8"
-                     >
-                         <div className="p-4 rounded-3xl bg-white/[0.03] border border-white/5 backdrop-blur-xl shadow-2xl">
-                            <BrandLogo size="large" isAnimated={true} />
-                         </div>
-                     </motion.div>
-                     
-                     <motion.h1 
-                        initial={{ opacity: 0, y: 10 }}
+        {/* Main Content Area */}
+        <div className="min-h-screen pt-24 px-4 md:px-8 pb-20 max-w-[1400px] mx-auto w-full">
+            <AnimatePresence mode="wait">
+                {/* CASE 1: SHOW ANALYSIS RESULT OR LOADING */}
+                {(result || loading || error) ? (
+                    <motion.div 
+                        key="analysis"
+                        initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.8, delay: 0.2 }}
-                        className="text-5xl md:text-7xl font-medium tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-white/40 pb-2"
-                     >
-                        Predict the Future.
-                     </motion.h1>
+                        exit={{ opacity: 0, y: -20 }}
+                        className="w-full"
+                    >
+                         <div className="mb-6 flex items-center gap-2 text-sm text-gray-500 cursor-pointer hover:text-white transition-colors" onClick={() => { handleClearAnalysis(); setView('markets'); }}>
+                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                             Back to Markets
+                         </div>
 
-                     <motion.p 
+                         {loading && (
+                           <div className="h-[60vh] flex flex-col items-center justify-center">
+                              <div className="relative w-16 h-16 mb-6">
+                                  <div className="absolute inset-0 border-t-2 border-blue-500 rounded-full animate-spin"></div>
+                                  <div className="absolute inset-0 border-r-2 border-purple-500/50 rounded-full animate-spin-slow"></div>
+                              </div>
+                              <div className="text-blue-400 font-mono text-xs tracking-widest uppercase animate-pulse mb-2">
+                                {elapsedTime < 5 ? 'Connecting...' : 
+                                 elapsedTime < 15 ? 'Analyzing Options...' : 
+                                 'Processing Intelligence...'}
+                              </div>
+                              <div className="text-gray-600 font-mono text-[10px]">{elapsedTime}s</div>
+                           </div>
+                         )}
+
+                         {error && (
+                            <div className="p-8 bg-red-500/5 border border-red-500/20 text-red-200 rounded-2xl text-center max-w-xl mx-auto">
+                              <div className="font-semibold mb-2">Analysis Failed</div>
+                              <div className="text-sm opacity-70 mb-6">{error}</div>
+                              <Button onClick={() => handleAnalyze(url)} className="bg-red-500/10 hover:bg-red-500/20 text-red-300">Retry</Button>
+                            </div>
+                         )}
+
+                         {result && !loading && (
+                            <MinimalDashboard
+                             result={result}
+                             onOpenGuide={() => setShowGuide(true)}
+                             onSelect={handleAnalyze}
+                             onRefresh={handleRefresh}
+                             isRefreshing={isRefreshing}
+                            />
+                         )}
+                    </motion.div>
+                ) : (
+                    /* CASE 2: SHOW VIEWS */
+                    <motion.div 
+                        key={view}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        transition={{ duration: 0.8, delay: 0.4 }}
-                        className="text-xl text-gray-400 font-light leading-relaxed max-w-xl mx-auto"
-                     >
-                       Institutional-grade prediction market analysis powered by autonomous AI agents.
-                     </motion.p>
-                  </div>
+                        exit={{ opacity: 0 }}
+                        className="flex flex-col gap-8"
+                    >
+                        {view === 'markets' && (
+                            <>
+                                {/* Featured Hero Banner - Visual Only */}
+                                <div className="w-full h-80 rounded-2xl relative overflow-hidden flex flex-col justify-end p-8 md:p-12 group">
+                                     {/* Background with Gradient and Noise */}
+                                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/40 via-[#050505] to-blue-900/20 z-0"></div>
+                                     <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05] mix-blend-overlay"></div>
+                                     
+                                     {/* Animated Glow Orbs */}
+                                     <motion.div 
+                                        animate={{ 
+                                            scale: [1, 1.2, 1],
+                                            opacity: [0.3, 0.5, 0.3],
+                                        }}
+                                        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+                                        className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-blue-600/20 blur-[120px] rounded-full"
+                                     />
+                                     <motion.div 
+                                        animate={{ 
+                                            scale: [1, 1.1, 1],
+                                            opacity: [0.2, 0.4, 0.2],
+                                        }}
+                                        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+                                        className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-600/10 blur-[100px] rounded-full"
+                                     />
 
-                  {/* Premium Search Input */}
-                  <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.8, delay: 0.5 }}
-                    className="w-full max-w-2xl mx-auto space-y-20"
-                  >
-                      <div className="relative group z-20">
-                          <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500/30 to-purple-500/30 rounded-full blur opacity-0 group-hover:opacity-100 transition duration-1000"></div>
-                          <div className="relative flex items-center bg-[#0A0A0A]/80 border border-white/10 rounded-full p-2 shadow-2xl backdrop-blur-xl transition-all duration-300 hover:border-white/20 hover:bg-[#0A0A0A]">
-                              <div className="pl-6 pr-4 text-gray-500">
-                                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                  </svg>
-                              </div>
-                              <input 
-                                  value={url}
-                                  onChange={(e) => setUrl(e.target.value)}
-                                  onKeyDown={(e) => e.key === 'Enter' && handleAnalyze(url)}
-                                  placeholder="Paste market URL..."
-                                  className="flex-1 bg-transparent border-none text-white placeholder-gray-600 text-lg py-3 focus:outline-none focus:ring-0 font-light tracking-wide"
-                              />
-                              <div className="pr-2">
-                                  <button 
-                                      onClick={() => handleAnalyze(url)}
-                                      className="bg-white text-black hover:bg-gray-200 transition-all rounded-full px-6 py-3 font-medium text-sm tracking-wide flex items-center gap-2"
-                                  >
-                                      Analyze
-                                  </button>
-                              </div>
-                          </div>
-                          
-                          <div className="mt-6 flex justify-center gap-6 text-xs text-gray-500 font-mono uppercase tracking-widest opacity-60">
-                              <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Polymarket</span>
-                              <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Kalshi</span>
-                          </div>
-                      </div>
+                                     {/* Content */}
+                                     <div className="relative z-10 max-w-3xl">
+                                         <motion.div 
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: 0.2 }}
+                                            className="flex items-center gap-3 mb-4"
+                                         >
+                                             <span className="px-3 py-1 bg-white/5 border border-white/10 text-white/70 text-[10px] font-mono uppercase tracking-[0.2em] rounded-full backdrop-blur-md">
+                                                 Market Intelligence
+                                             </span>
+                                             <div className="h-px w-12 bg-white/20"></div>
+                                         </motion.div>
+                                         
+                                         <motion.h1 
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: 0.3 }}
+                                            className="text-4xl md:text-6xl font-medium text-white mb-6 leading-[1.1] tracking-tight"
+                                         >
+                                             <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/50">
+                                                 Predict the future
+                                             </span>
+                                             <br />
+                                             <span className="font-light text-white/40 italic">
+                                                 before it happens.
+                                             </span>
+                                         </motion.h1>
 
-                      <div className="relative">
-                          <TrendingMarkets onSelect={handleAnalyze} />
-                      </div>
-                  </motion.div>
-               </motion.div>
-          </AnimatePresence>
-          
-        </main>
+                                         <motion.p 
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: 0.4 }}
+                                            className="text-sm md:text-base text-gray-400 max-w-xl leading-relaxed font-light"
+                                         >
+                                             Advanced AI models analyzing millions of data points to provide institutional-grade probability forecasts for global events.
+                                         </motion.p>
+                                     </div>
 
-        <SiteFooter />
+                                     {/* Decorative Grid Lines */}
+                                     <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_70%)] pointer-events-none"></div>
+                                </div>
+
+                                {/* Market List */}
+                                <div className="w-full">
+                                    <TrendingMarkets onSelect={handleAnalyze} />
+                                </div>
+                            </>
+                        )}
+
+                        {view === 'activity' && (
+                            <div className="w-full max-w-4xl mx-auto mt-8">
+                                <h2 className="text-2xl font-bold text-white mb-6">Market Activity</h2>
+                                <HotActivities onSelect={handleAnalyze} />
+                            </div>
+                        )}
+
+                        {view === 'leaderboard' && (
+                            <Leaderboard />
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
 
         <AnimatePresence>
             {showGuide && <HowItWorks onClose={() => setShowGuide(false)} />}
@@ -162,6 +342,7 @@ function HomeContent() {
   );
 }
 
+// Keeping original exports intact
 import { Suspense } from 'react';
 
 export default function Home() {
