@@ -199,7 +199,9 @@ export async function POST(request: NextRequest) {
                 volume_share_percent: 0, // Calculated later
                 price_change_24h: Number(m.oneDayPriceChange || 0)
             };
-        });
+        })
+        .sort((a, b) => b.implied_probability - a.implied_probability); // Sort by probability DESC
+        
         // Use the event volume
         mainMarket = event.markets[0]; // Just for other metadata
     } else {
@@ -378,7 +380,7 @@ export async function POST(request: NextRequest) {
       expiresAt: expiresAt.toISOString(),
       cacheAgeMinutes: 0,
       ttlMinutes,
-      refreshAvailableIn: 0
+      refreshAvailableIn: ttlMinutes // Wait full TTL before refresh allowed
     };
 
     return NextResponse.json(freshResponse);

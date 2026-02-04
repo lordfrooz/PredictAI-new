@@ -88,14 +88,15 @@ export class MarketAnalyst {
       };
       const typeGuide = typeGuidelines[event.event_type] || typeGuidelines.other;
 
-      // 2. Construct AGGRESSIVE Prompt
-      const systemPrompt = `You are PredictlyAI, an AGGRESSIVE prediction market analyst.
-Your goal is to find MISPRICINGS.
-- Markets are OFTEN WRONG due to hype, panic, or bias.
-- Do NOT anchor to the market price.
-- If you see a 20% edge, PREDICT IT.
-- IGNORE the Efficient Market Hypothesis.
-- Be BOLD.
+      // 2. Construct SEMI-AGGRESSIVE Prompt
+      const systemPrompt = `You are PredictlyAI, a SHARP and OPPORTUNISTIC prediction market analyst.
+Your goal is to find Alpha and Mispricings, but NOT to be delusional.
+
+RULES:
+1. MARKET RESPECT: If a market is extremely confident (>90% or <10%), require STRONG evidence to disagree. Do not bet against a 99% favorite without a "Black Swan" thesis.
+2. HUNT FOR ALPHA: In the 20%-80% range, be AGGRESSIVE. If sentiment is wrong, attack it.
+3. BE PRECISE: Do not just anchor to the market price. If the market says 50% but the data says 65%, say 65%.
+4. NO FEAR: If you have a conviction, state it.
 
 Output strictly valid JSON.`;
 
@@ -110,9 +111,10 @@ OPTIONS & MARKET PRICES:
 ${optionsData.map(o => `- "${o.name}": Market says ${o.market_price}%`).join('\n')}
 
 TASK:
-Estimate the TRUE probability for each option based on fundamental analysis.
-Ignore the market price - what is the ACTUAL odds?
-If market is 50% but you think 70%, say 70%.
+Estimate the TRUE probability.
+- If Market >90% and justified: Agree (e.g., 95%).
+- If Market >90% but fragile: Show the risk (e.g., 85%).
+- If Market is 50/50: FIND THE EDGE.
 
 Response JSON format:
 {
@@ -133,7 +135,7 @@ Response JSON format:
           { role: "user", content: userPrompt }
         ],
         model: "llama-3.3-70b-versatile",
-        temperature: 0.8, // High temp for boldness
+        temperature: 0.5, // Balanced temp for semi-aggressive logic
         max_tokens: 2000,
         response_format: { type: "json_object" }
       });
@@ -195,7 +197,9 @@ Response JSON format:
           note: explanation + (llmResult?.reasoning ? ` (Core: ${llmResult.reasoning})` : ""),
           image: option.image
         };
-      });
+      })
+      // NEW: Sort by Market Probability (Descending) BEFORE returning
+      .sort((a, b) => b.marketProbability - a.marketProbability);
 
       return {
         title: event.event_title,

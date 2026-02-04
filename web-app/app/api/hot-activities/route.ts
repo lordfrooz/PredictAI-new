@@ -101,11 +101,14 @@ export async function GET() {
       };
     });
 
-    // Sort by Highest Positive Change Descending
-    activities.sort((a: any, b: any) => b.change - a.change);
+    // Sort by Absolute Change Descending (Biggest Movers, regardless of direction)
+    activities.sort((a: any, b: any) => Math.abs(b.change) - Math.abs(a.change));
 
-    // Return top 20
-    return NextResponse.json({ activities: activities.slice(0, 20) });
+    // Filter out minimal movements (< 1%) to avoid noise
+    const significantMovers = activities.filter((a: any) => Math.abs(a.change) >= 1);
+
+    // Return top 20 significant movers
+    return NextResponse.json({ activities: significantMovers.slice(0, 20) });
   } catch (error) {
     console.error('Error fetching hot activities:', error);
     // Fallback to empty array or some error state, but let's return empty for now

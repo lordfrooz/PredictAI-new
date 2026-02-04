@@ -170,6 +170,17 @@ export function calculateHybridProbability(
     confidenceFactor = 0.30; // Contrarian but weak signals -> Stick to Market (Safety)
   }
 
+  // --- SAFETY CHECK: Extreme Market Anchor ---
+  // If market is >90% or <10% (almost certain), force AI to be humble unless signals are PERFECT.
+  const isExtremeMarket = marketProbability > 90 || marketProbability < 10;
+  if (isExtremeMarket && isContrarian) {
+      // If we are trying to bet against a 95% odds, we better be damn sure.
+      // If signals are not perfect (alignment < 3), drop confidence to near zero.
+      if (alignmentScore < 3) {
+          confidenceFactor = 0.10; // Trust the market almost entirely
+      }
+  }
+
   // --- STEP 3: Dynamic Blending ---
   // Final = (Model * Confidence) + (Market * (1 - Confidence))
   
