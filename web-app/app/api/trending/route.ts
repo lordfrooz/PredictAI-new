@@ -101,11 +101,22 @@ export async function GET(request: Request) {
 
         const market = mainMarket || event.markets?.[0];
 
+        // Ensure change is not 0 if possible by checking top outcome change
+        let displayChange = market?.oneDayPriceChange ? (Number(market.oneDayPriceChange) * 100).toFixed(1) : 0;
+        
+        // Fallback: If main market change is 0, use the biggest change from top outcomes
+        if (Number(displayChange) === 0 && topOutcomes.length > 0) {
+            const maxChange = topOutcomes.reduce((max, outcome) => 
+                Math.abs(outcome.change || 0) > Math.abs(max) ? (outcome.change || 0) : max
+            , 0);
+            if (maxChange !== 0) displayChange = maxChange.toFixed(1);
+        }
+
         return {
             title: event.title,
             slug: event.slug,
             volume: market ? `$${(Number(market.volume) / 1000000).toFixed(1)}M` : 'N/A',
-            change: market?.oneDayPriceChange ? (Number(market.oneDayPriceChange) * 100).toFixed(1) : 0,
+            change: displayChange,
             image: event.image || market?.image,
             topOutcomes
         };
