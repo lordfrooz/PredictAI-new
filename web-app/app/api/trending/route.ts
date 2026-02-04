@@ -1,5 +1,25 @@
 import { NextResponse } from 'next/server';
 
+function toPctChange(raw: unknown): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 0;
+  const pct = Math.abs(n) > 1 ? n : n * 100;
+  return Number(pct.toFixed(2));
+}
+
+function safeParseArray(value: unknown): any[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -76,21 +96,21 @@ export async function GET(request: Request) {
                  topOutcomes = sortedMarkets.slice(0, 2).map(m => ({
                      name: m.groupItemTitle || "Option",
                      prob: Math.round(getPrice(m) * 100),
-                     change: m.oneDayPriceChange ? Number((Number(m.oneDayPriceChange) * 100).toFixed(1)) : 0
+                    change: toPctChange(m.oneDayPriceChange)
                  }));
              } else {
                  // Binary Market (Outcomes in outcomePrices array: [Yes, No])
                  // Assuming mainMarket.outcomePrices[0] is "Yes" and [1] is "No"
                  // And outcomes array is ["Yes", "No"]
-                 const outcomePrices = JSON.parse(mainMarket.outcomePrices || "[]");
-                 const clobTokenIds = JSON.parse(mainMarket.clobTokenIds || "[]");
+                const outcomePrices = safeParseArray(mainMarket.outcomePrices);
+                const clobTokenIds = safeParseArray(mainMarket.clobTokenIds);
                  
                  // Fallback if outcomePrices is not a string array but already parsed or different structure
                  const yesPrice = Number(outcomePrices[0] || mainMarket.price || 0);
                  const noPrice = Number(outcomePrices[1] || (1 - yesPrice));
                  
                  // Change is usually for the 'Yes' side in binary markets
-                 const yesChange = mainMarket.oneDayPriceChange ? Number((Number(mainMarket.oneDayPriceChange) * 100).toFixed(1)) : 0;
+                const yesChange = toPctChange(mainMarket.oneDayPriceChange);
                  
                  topOutcomes = [
                      { name: "Yes", prob: Math.round(yesPrice * 100), change: yesChange },
@@ -101,15 +121,25 @@ export async function GET(request: Request) {
 
         const market = mainMarket || event.markets?.[0];
 
-        // Ensure change is not 0 if possible by checking top outcome change
-        let displayChange = market?.oneDayPriceChange ? (Number(market.oneDayPriceChange) * 100).toFixed(1) : 0;
-        
-        // Fallback: If main market change is 0, use the biggest change from top outcomes
-        if (Number(displayChange) === 0 && topOutcomes.length > 0) {
-            const maxChange = topOutcomes.reduce((max, outcome) => 
-                Math.abs(outcome.change || 0) > Math.abs(max) ? (outcome.change || 0) : max
-            , 0);
-            if (maxChange !== 0) displayChange = maxChange.toFixed(1);
+        const mainChange = toPctChange(market?.oneDayPriceChange);
+
+        let bestMarketChange = 0;
+        if (event.markets && event.markets.length > 0) {
+          for (const m of event.markets) {
+            const pct = toPctChange(m?.oneDayPriceChange);
+            if (Math.abs(pct) > Math.abs(bestMarketChange)) bestMarketChange = pct;
+          }
+        }
+
+        let displayChange = mainChange;
+        if (displayChange === 0 && bestMarketChange !== 0) displayChange = bestMarketChange;
+
+        if (displayChange === 0 && topOutcomes.length > 0) {
+          const maxOutcomeChange = topOutcomes.reduce(
+            (max, outcome) => (Math.abs(outcome.change || 0) > Math.abs(max) ? (outcome.change || 0) : max),
+            0
+          );
+          if (maxOutcomeChange !== 0) displayChange = Number(maxOutcomeChange.toFixed(1));
         }
 
         return {
